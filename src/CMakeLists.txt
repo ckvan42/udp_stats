@@ -1,17 +1,6 @@
 # Note that headers are optional, and do not affect add_library, but they will not
 # show up in IDEs unless they are listed in add_library.
 
-set(HEADER_LIST
-        "${dc_udp_SOURCE_DIR}/include/udp_structures.h" ../include/util.h
-        )
-
-set(SERVER_SOURCE_LIST
-        "server.c"
-        )
-
-set(CLIENT_SOURCE_LIST
-        "client.c" util.c)
-
 add_compile_definitions(_POSIX_C_SOURCE=200809L _XOPEN_SOURCE=700)
 
 if(APPLE)
@@ -24,8 +13,8 @@ IF(LINT)
 ENDIF()
 
 # Make a executables
-add_executable(dc_udp_server ${SERVER_SOURCE_LIST} ${HEADER_LIST})
-add_executable(dc_udp_client ${CLIENT_SOURCE_LIST} ${HEADER_LIST})
+add_executable(dc_udp_server ${SERVER_SOURCE_LIST} ${COMMON_SOURCES_LIST} ${HEADER_LIST})
+add_executable(dc_udp_client ${CLIENT_SOURCE_LIST} ${COMMON_SOURCES_LIST} ${HEADER_LIST})
 
 # We need this directory, and users of our library will need it too
 target_include_directories(dc_udp_server PRIVATE ../include)

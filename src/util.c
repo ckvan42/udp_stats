@@ -45,3 +45,39 @@ void process_packets_in_sequence(const struct dc_posix_env *env, struct dc_error
         }
     }
 }
+
+void count_min_max_dropped(const size_t *array, size_t numberOfPackets, size_t *min, size_t *max)
+{
+    // loop through the array
+    size_t temp_max;
+    size_t temp_min;
+
+    size_t difference;
+
+    temp_max = 0;
+    temp_min = numberOfPackets;
+    for (size_t i = 0; i < numberOfPackets - 1; ++i)
+    {
+        difference = array[i + 1] - array[i];
+        if (difference > 1) //then there is a dropped packet.
+        {
+            if (difference < temp_min)
+            {
+                temp_min = difference;
+            } else if (difference > temp_max)
+            {
+                temp_max = difference;
+            }
+        }
+    }
+    // find the difference between adjacent elements.
+    // if the difference is smaller than the minimum,
+    //Update the temp_minimum.
+            //else if the difference is bigger than the maximum,
+            //Update the temp_maximum.
+
+    // min is temp_min - 1
+    // max is temp_max - 1
+    *min = temp_min - 1;
+    *max = temp_max - 1;
+}

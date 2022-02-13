@@ -10,7 +10,7 @@ set(TEST_HEADER_LIST
 
 set(TEST_SOURCE_LIST
         main.c
-        util.c
+        util_tests.c
         )
 
 include_directories(${CGREEN_PUBLIC_INCLUDE_DIRS} ${PROJECT_BINARY_DIR})

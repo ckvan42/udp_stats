@@ -9,6 +9,23 @@ project(
         DESCRIPTION ""
         LANGUAGES C)
 
+set(HEADER_LIST
+        "${dc_udp_SOURCE_DIR}/include/udp_structures.h"
+        "${dc_udp_SOURCE_DIR}/include/util.h"
+        )
+
+set(COMMON_SOURCE_LIST
+        "${dc_udp_SOURCE_DIR}/src/util.c"
+        )
+
+set(SERVER_SOURCE_LIST
+        "${dc_udp_SOURCE_DIR}/src/server.c"
+        )
+
+set(CLIENT_SOURCE_LIST
+        "${dc_udp_SOURCE_DIR}/src/client.c"
+        )
+
 ### Require out-of-source builds
 # this still creates a CMakeFiles directory and CMakeCache.txt- can we delete them?
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)

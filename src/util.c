@@ -2,7 +2,11 @@
 // Created by Giwoun Bae on 2022-02-12.
 //
 
+#include <libc.h>
 #include "util.h"
+
+static void array_swap(size_t *first, size_t *second);
+
 
 /**
  * Process the packets for dropped, out-of-order packets in sequence.
@@ -81,3 +85,64 @@ void count_min_max_dropped(const size_t *array, size_t numberOfPackets, size_t *
     *min = temp_min - 1;
     *max = temp_max - 1;
 }
+
+void count_min_max_out_of_order(const size_t *array, size_t numberOfPackets, size_t *min, size_t *max)
+{
+    size_t count;
+    size_t temp_min;
+    size_t temp_max;
+    size_t temp_array[numberOfPackets];
+
+    count = 0;
+    temp_min = numberOfPackets;
+    temp_max = 0;
+    memcpy(temp_array, array, sizeof(temp_array));
+    //for each element,
+        // do bubble sort?
+            //count number of swaps.
+    for (size_t i = 0; i <numberOfPackets - 1; ++i)
+    {
+        if (temp_array[i] < temp_array[i + 1])
+        {
+            count = 0;
+        }
+        while (temp_array[i] > temp_array[i + 1])
+        {
+            array_swap(&temp_array[i], &temp_array[i + 1]);
+            count++;
+            --i;
+        }
+
+        if (count > 0)
+        {
+            if (count < temp_min)
+            {
+                temp_min = count;
+            } else if (count > temp_max)
+            {
+                temp_max = count;
+            }
+        }
+    }
+
+    *min = temp_min;
+    *max = temp_max;
+}
+
+static void array_swap(size_t *first, size_t *second)
+{
+    size_t temp;
+
+    temp = *first;
+    *first = *second;
+    *second = temp;
+}
+
+double calculate_average_packets_lost(size_t numberOfPackets, size_t totalPacketsSent)
+{
+    double result;
+
+    result = (double) (numberOfPackets)/ (double) (totalPacketsSent);
+    return result;
+}
+

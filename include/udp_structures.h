@@ -6,7 +6,11 @@
 #include <stddef.h>
 #include <sys/time.h>
 
-#define DEFAULT_UDP_PORT 2007
+#define DEFAULT_UDP_PORT 4981
+#define DEFAULT_UDP_DELAY 0
+#define DEFAULT_UDP_NUM_PACKETS 100
+#define DEFAULT_UDP_PACKET_SIZE 100
+
 typedef __uint16_t              in_port_t;
 
 /**
@@ -56,6 +60,15 @@ struct udp_packet
     char** list_packets;
     size_t *packet_number_array;
     struct diagnostics* diagnostics;
+};
+
+struct client_udp
+{
+    struct connection* connections;
+    char* start_time;
+    uint16_t delay;
+    uint16_t num_packets;
+    uint16_t packet_size;
 };
 
 #endif // DC_UDP_UDP_STRUCTURES_H

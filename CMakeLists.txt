@@ -12,10 +12,14 @@ project(
 set(HEADER_LIST
         "${dc_udp_SOURCE_DIR}/include/udp_structures.h"
         "${dc_udp_SOURCE_DIR}/include/util.h"
+        "${dc_udp_SOURCE_DIR}/include/udp.h"
+        "${dc_udp_SOURCE_DIR}/include/client_impl.h"
+        "${dc_udp_SOURCE_DIR}/include/connections.h"
         )
 
 set(COMMON_SOURCE_LIST
         "${dc_udp_SOURCE_DIR}/src/util.c"
+        "${dc_udp_SOURCE_DIR}/src/connections.c"
         )
 
 set(SERVER_SOURCE_LIST
@@ -24,6 +28,7 @@ set(SERVER_SOURCE_LIST
 
 set(CLIENT_SOURCE_LIST
         "${dc_udp_SOURCE_DIR}/src/client.c"
+        "${dc_udp_SOURCE_DIR}/src/client_impl.c"
         )
 
 ### Require out-of-source builds

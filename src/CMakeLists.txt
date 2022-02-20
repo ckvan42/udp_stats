@@ -13,8 +13,8 @@ IF(LINT)
 ENDIF()
 
 # Make a executables
-add_executable(dc_udp_server ${SERVER_SOURCE_LIST} ${COMMON_SOURCES_LIST} ${HEADER_LIST})
-add_executable(dc_udp_client ${CLIENT_SOURCE_LIST} ${COMMON_SOURCES_LIST} ${HEADER_LIST})
+add_executable(dc_udp_server ${SERVER_SOURCE_LIST} ${COMMON_SOURCE_LIST} ${HEADER_LIST})
+add_executable(dc_udp_client ${CLIENT_SOURCE_LIST} ${COMMON_SOURCE_LIST} ${HEADER_LIST})
 
 # We need this directory, and users of our library will need it too
 target_include_directories(dc_udp_server PRIVATE ../include)
@@ -87,5 +87,7 @@ add_custom_target(
         -i
         ${HEADER_LIST}
         ${HEADER_SYS_LIST}
-        ${SOURCE_LIST}
+        ${COMMON_SOURCE_LIST}
+        ${SERVER_SOURCE_LIST}
+        ${CLIENT_SOURCE_LIST}
 )

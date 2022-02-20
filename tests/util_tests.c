@@ -3,7 +3,7 @@
 #include <dc_util/strings.h>
 
 static void test_min_max_dropped(size_t *array, size_t numPackets, size_t expected_min, size_t expected_max);
-static void test_min_max_out_of_order(size_t *array, size_t numPackets, size_t expected_min, size_t expected_max);
+static void test_min_max_out_of_order(const struct dc_posix_env *env, size_t *array, size_t numPackets, size_t expected_min, size_t expected_max);
 
 
 Describe(util);
@@ -44,14 +44,14 @@ Ensure(util, count_min_max_out_of_order)
     size_t dropped_array[] = {1, 3, 2, 4, 7, 6, 5};
     size_t * arrayPt = malloc(sizeof dropped_array);
     memcpy(arrayPt, dropped_array, (sizeof dropped_array));
-    test_min_max_out_of_order(arrayPt, 7, 1, 3);
+    test_min_max_out_of_order(&environ, arrayPt, 7, 1, 2);
 }
 
-static void test_min_max_out_of_order(size_t *array, size_t numPackets, size_t expected_min, size_t expected_max)
+static void test_min_max_out_of_order(const struct dc_posix_env *env, size_t *array, size_t numPackets, size_t expected_min, size_t expected_max)
 {
     size_t min;
     size_t max;
-    count_min_max_out_of_order(array, numPackets, &min, &max);
+    count_min_max_out_of_order(env, array, numPackets, &min, &max);
     assert_equal(min, expected_min);
     assert_equal(max, expected_max);
 }

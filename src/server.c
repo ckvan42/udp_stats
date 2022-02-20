@@ -15,7 +15,6 @@
 #include <getopt.h>
 #include <unistd.h>
 
-
 struct application_settings
 {
     struct dc_opt_settings opts;
@@ -26,6 +25,9 @@ struct application_settings
     struct dc_setting_bool *reuse_address;
     struct addrinfo *address;
     int server_socket_fd;
+
+    //udp_information
+
 };
 
 static struct dc_application_settings *create_settings(const struct dc_posix_env *env, struct dc_error *err);
@@ -89,7 +91,7 @@ int main(int argc, char *argv[])
     dc_sigaction(&env, &err, SIGINT, &sa, NULL);
     dc_sigaction(&env, &err, SIGTERM, &sa, NULL);
 
-    info = dc_application_info_create(&env, &err, "Echo Server");
+    info = dc_application_info_create(&env, &err, "UDP Server");
     ret_val = dc_application_run(&env, &err, info, create_settings, destroy_settings, run, dc_default_create_lifecycle, dc_default_destroy_lifecycle,
                                  "~/.dcecho.conf",
                                  argc, argv);
@@ -141,7 +143,7 @@ static struct dc_application_settings *create_settings(const struct dc_posix_env
     settings->opts.opts = dc_calloc(env, err, (sizeof(opts) / sizeof(struct options)) + 1, sizeof(struct options));
     dc_memcpy(env, settings->opts.opts, opts, sizeof(opts));
     settings->opts.flags = "c:vh:i:p:f";
-    settings->opts.env_prefix = "DC_ECHO_";
+    settings->opts.env_prefix = "DC_UDP";
 
     return (struct dc_application_settings *)settings;
 }
@@ -180,6 +182,7 @@ static struct dc_server_lifecycle *create_server_lifecycle(const struct dc_posix
     dc_server_lifecycle_set_create_socket(env, lifecycle, do_create_socket);
     dc_server_lifecycle_set_set_sockopts(env, lifecycle, do_set_sockopts);
     dc_server_lifecycle_set_bind(env, lifecycle, do_bind);
+    //set_udp_stuff(env, lifecycle, do_udp_accept);
     dc_server_lifecycle_set_listen(env, lifecycle, do_listen);
     dc_server_lifecycle_set_setup(env, lifecycle, do_setup);
     dc_server_lifecycle_set_accept(env, lifecycle, do_accept);
@@ -203,7 +206,7 @@ static int run(const struct dc_posix_env *env, __attribute__ ((unused)) struct d
     struct dc_server_info *info;
 
     DC_TRACE(env);
-    info = dc_server_info_create(env, err, "Echo Server", NULL, settings);
+    info = dc_server_info_create(env, err, "UDP Server", NULL, settings);
 
     if(dc_error_has_no_error(err))
     {

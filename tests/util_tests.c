@@ -4,6 +4,7 @@
 
 static void test_min_max_dropped(size_t *array, size_t numPackets, size_t expected_min, size_t expected_max);
 static void test_min_max_out_of_order(const struct dc_posix_env *env, size_t *array, size_t numPackets, size_t expected_min, size_t expected_max);
+static void test_delay(char *currentTime, unsigned int expected);
 
 
 Describe(util);
@@ -70,6 +71,23 @@ Ensure(util, calculate_average_packets_lost)
     assert_double_equal(actual_average, exp_average);
 }
 
+
+Ensure(util, calculate_start_delay)
+{
+    char *time_start;
+
+    time_start = "22:50";
+    test_delay(time_start, 0);
+}
+
+static void test_delay(char *currentTime, unsigned int expected)
+{
+    unsigned int difference;
+
+    difference = calculate_start_delay(&environ, &error, currentTime);
+    assert_equal(difference, 0);
+}
+
 TestSuite *util_tests(void)
 {
     TestSuite *suite;
@@ -78,6 +96,7 @@ TestSuite *util_tests(void)
     add_test_with_context(suite, util, count_min_max_dropped);
     add_test_with_context(suite, util, count_min_max_out_of_order);
     add_test_with_context(suite, util, calculate_average_packets_lost);
+    add_test_with_context(suite, util, calculate_start_delay);
 
     return suite;
 }

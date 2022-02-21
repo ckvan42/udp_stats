@@ -6,6 +6,8 @@
 #define DC_UDP_UTIL_H
 
 #include "udp_structures.h"
+#include "dc_posix/dc_posix_env.h"
+#include "dc_error/error.h"
 
 /**
  * count the minimum and maximum dropped packets in sequence.
@@ -35,5 +37,17 @@ void count_min_max_out_of_order(const struct dc_posix_env* env, const size_t *ar
  * @return the average number of packets lost.
  */
 double calculate_average_packets_lost(size_t numberOfPackets, size_t totalPacketsSent);
+
+
+/**
+ * Calculate the start_delay from the start_time.
+ *
+ * @param env
+ * @param err
+ * @param start_time
+ * @return number of seconds to sleep before the program starts sending the UDP packets.
+ *
+ */
+unsigned int calculate_start_delay(const struct dc_posix_env* env, struct dc_error *err, const char* start_time);
 
 #endif //DC_UDP_UTIL_H

@@ -36,10 +36,17 @@ int run_udp_diagnostics(const struct dc_posix_env *env,
         int from_state;
         int to_state;
 
+        dc_memset(env, &states, '\0', sizeof (struct client_udp));
+
         states.connections = dc_calloc(env, err, 1, sizeof(struct connection));
 
         create_tcp_connection(env, err, states.connections, hostname, family, ip_version, port);
         create_udp_connection(env, err, states.connections, hostname, family, ip_version, port);
+        //save start time
+        states.start_time = dc_strdup(env, err, start_time);
+        states.delay = delay;
+        states.num_packets = num_packets;
+        states.packet_size = packet_size;
 
         ret_val = dc_fsm_run(env, err, fsm_info, &from_state, &to_state, &states, transitions);
         dc_fsm_info_destroy(env, &fsm_info);
@@ -51,9 +58,21 @@ int run_udp_diagnostics(const struct dc_posix_env *env,
     return ret_val;
 }
 
-
+/**
+ * Initialize udp_packet
+ *
+ * @param env
+ * @param err
+ * @param arg
+ * @return
+ */
 int init_states(const struct dc_posix_env *env, struct dc_error *err, void* arg)
 {
+    struct client_udp *clientUdp;
+
+    clientUdp = (struct client_udp*)arg;
+
+    printf("TESTING\n");
 
     return SEND_TCP_START;
 }

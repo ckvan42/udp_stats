@@ -40,6 +40,7 @@ struct diagnostics
 {
     struct client_info* info;
     size_t packet_sent;
+    size_t packet_size;
     size_t packet_received;
     size_t packet_lost;
     size_t packet_out_of_order;
@@ -65,10 +66,18 @@ struct udp_packet
 struct client_udp
 {
     struct connection* connections;
-    double start_time;
+    double start_time_delay;
     uint16_t delay;
     uint16_t num_packets;
     uint16_t packet_size;
+    struct packet** packets;
+};
+
+struct packet
+{
+    uint16_t id; // id of the packet (eg. 0-99 above)
+    uint16_t size; // size of the data in bytes
+    uint8_t *data; // the data
 };
 
 #endif // DC_UDP_UDP_STRUCTURES_H

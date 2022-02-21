@@ -14,6 +14,11 @@
 #include <dc_util/types.h>
 #include <getopt.h>
 #include <unistd.h>
+#include "connections.h"
+#include <poll.h>
+#include <dc_posix/dc_unistd.h>
+#include <arpa/inet.h>
+
 
 struct application_settings
 {
@@ -57,7 +62,7 @@ static void do_shutdown(const struct dc_posix_env *env, struct dc_error *err, vo
 
 static void do_destroy_settings(const struct dc_posix_env *env, struct dc_error *err, void *arg);
 
-void echo(const struct dc_posix_env *env, struct dc_error *err, int client_socket_fd);
+void echo(const struct dc_posix_env *env, struct dc_error *err, int client_socket_fd, uint16_t port);
 
 /*
 static void write_displayer(const struct dc_posix_env *env, struct dc_error *err, const uint8_t *data, size_t count,
@@ -182,7 +187,6 @@ static struct dc_server_lifecycle *create_server_lifecycle(const struct dc_posix
     dc_server_lifecycle_set_create_socket(env, lifecycle, do_create_socket);
     dc_server_lifecycle_set_set_sockopts(env, lifecycle, do_set_sockopts);
     dc_server_lifecycle_set_bind(env, lifecycle, do_bind);
-    //set_udp_stuff(env, lifecycle, do_udp_accept);
     dc_server_lifecycle_set_listen(env, lifecycle, do_listen);
     dc_server_lifecycle_set_setup(env, lifecycle, do_setup);
     dc_server_lifecycle_set_accept(env, lifecycle, do_accept);
@@ -342,10 +346,13 @@ static bool do_accept(const struct dc_posix_env *env, struct dc_error *err, int 
     app_settings = arg;
     ret_val = false;
 
+    in_port_t port;
+
     printf("accepting\n");
     *client_socket_fd = dc_network_accept(env, err, app_settings->server_socket_fd);
     printf("accepted\n");
 
+    port = dc_setting_uint16_get(env, app_settings->port);
     if(dc_error_has_error(err))
     {
         if(exit_signal == 1 && dc_error_is_errno(err, EINTR))
@@ -356,36 +363,179 @@ static bool do_accept(const struct dc_posix_env *env, struct dc_error *err, int 
     }
     else
     {
-        echo(env, err, *client_socket_fd);
+        echo(env, err, *client_socket_fd, port);
     }
 
     return ret_val;
 }
 
-void echo(const struct dc_posix_env *env, struct dc_error *err, int client_socket_fd)
+static void print_packets(struct udp_packet* packet)
 {
-    struct dc_dump_info *dump_info;
-    struct dc_stream_copy_info *copy_info;
+    int i;
+    i = 0;
 
-    DC_TRACE(env);
-    dump_info = dc_dump_info_create(env, err, STDOUT_FILENO, dc_max_off_t(env));
-
-    if(dc_error_has_no_error(err))
+    while (packet->list_packets[i + 1])
     {
-        copy_info = dc_stream_copy_info_create(env, err, NULL, dc_dump_dumper, dump_info, NULL, NULL);
+        printf("EACH PACKET: %s\n", packet->list_packets[i++]);
+    }
+}
 
-        if(dc_error_has_no_error(err))
+#define MAXLINE 100
+#define TIME_OUT_SEC 5
+static void connect_to_udp(const struct dc_posix_env* env, struct dc_error * err, uint16_t port, void *arg, int tcp_fd)
+{
+    int       sockfd;
+    struct    sockaddr_in servaddr;
+    struct    sockaddr_in cliaddr;
+    socklen_t len;
+    size_t     n;
+    struct pollfd poll_set[2];
+    int timeout;
+    int res_val;
+    struct udp_packet* udpPacket;
+
+    udpPacket = (struct udp_packet*)arg;
+
+    char      buffer[udpPacket->diagnostics->packet_size + 1];
+    timeout = TIME_OUT_SEC * 1000;
+    if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+    {
+        perror("socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    memset(&cliaddr, 0, sizeof(cliaddr));
+
+    servaddr.sin_family      = AF_INET; // IPv4
+    servaddr.sin_addr.s_addr = INADDR_ANY;
+    servaddr.sin_port        = htons(port);
+
+    if(bind(sockfd, (const struct sockaddr *)&servaddr,  sizeof(servaddr)) < 0)
+    {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    poll_set[0].fd = sockfd;
+    poll_set[0].events = POLLIN;
+
+    poll_set[1].fd = tcp_fd;
+    poll_set[1].events = POLLIN;
+    len = sizeof(cliaddr);  //len is value/resuslt
+    int i = 0;
+    while ((res_val = poll(poll_set, 2, timeout)) >= 0)
+    {
+        if (res_val != 0)
         {
-            dc_stream_copy(env, err, client_socket_fd, client_socket_fd, 1024, copy_info);
-
-            if(dc_error_has_no_error(err))
+            if (poll_set[0].revents & POLLIN)
             {
-                dc_stream_copy_info_destroy(env, &copy_info);
+                n = (size_t) recvfrom(poll_set[0].fd, (char *) buffer, udpPacket->diagnostics->packet_size,
+                                      MSG_WAITALL, (struct sockaddr *) &cliaddr,
+                                      &len);
+                buffer[n] = '\0';
+                if (i ==0) //only happens for the first time.
+                {
+                    char *ip;
+
+                    udpPacket->diagnostics->info->client_port = cliaddr.sin_port;
+                    ip = inet_ntoa(cliaddr.sin_addr);
+                    udpPacket->diagnostics->info->ip_address = dc_strdup(env, err, ip);
+                }
+                udpPacket->list_packets[i++] = dc_strdup(env, err, buffer);
+            }
+
+            if (poll_set[1].revents & POLLIN)
+            {
+                size_t size;
+
+                size = dc_strlen(env, END_MESSAGE) + 1;
+                char incoming[size];
+                n = (size_t) recv(poll_set[1].fd, incoming, size, 0);
+                incoming[n] = '\0';
+                if (dc_strcmp(env, END_MESSAGE, incoming) == 0)
+                {
+                    break;
+                }
             }
         }
-
-        dc_dump_info_destroy(env, &dump_info);
     }
+    print_packets(udpPacket);
+    dc_close(env, err, sockfd);
+}
+
+static void initialize_udpPacket(const struct dc_posix_env *env, struct dc_error *err, void* arg)
+{
+    struct udp_packet* udp_packet;
+
+    udp_packet = (struct udp_packet *)arg;
+
+    udp_packet->diagnostics = dc_calloc(env, err, 1, sizeof (struct diagnostics *));
+    udp_packet->diagnostics->info = dc_calloc(env, err, 1, sizeof (struct client_info *));
+}
+#define START true
+#define MESSAGE_SEPARATOR ":"
+
+static bool parse_initial_message(const struct dc_posix_env *env, struct dc_error *err, void* arg, char *message)
+{
+    bool res;
+    char *temp;
+    char *tempPt;
+    size_t tempSize;
+    char *start_str;
+    char *rest;
+    char *num_packets_sent_str;
+    char *pack_size_str;
+    struct udp_packet* udpPacket;
+
+
+    udpPacket = (struct udp_packet *)arg;
+
+    res = false;
+    temp = dc_strdup(env, err, message);
+    tempPt = temp;
+    tempSize = dc_strlen(env, temp);
+    start_str = dc_strtok_r(env, temp, MESSAGE_SEPARATOR, &temp);
+    num_packets_sent_str = temp;
+    pack_size_str = dc_strtok_r(env, temp, MESSAGE_SEPARATOR, &temp);
+
+    if (dc_strcmp(env, start_str, START_MESSAGE) == 0)
+    {
+        udpPacket->diagnostics->packet_sent = (size_t) dc_strtol(env, err, num_packets_sent_str, &rest, 10);
+        udpPacket->list_packets = dc_calloc(env, err, udpPacket->diagnostics->packet_sent, sizeof(char*));
+        udpPacket->diagnostics->packet_size = (size_t) dc_strtol(env, err, pack_size_str, &rest, 10);
+        res = START;
+    }
+    dc_free(env, tempPt, tempSize);
+    return res;
+}
+
+
+/**
+ * Initial incoming information.
+ *
+ * @param env
+ * @param err
+ * @param client_socket_fd
+ */
+#define MAX_INIT_MSG_SIZE 50
+void echo(const struct dc_posix_env *env, struct dc_error *err, int client_socket_fd, uint16_t port)
+{
+    char init_message[MAX_INIT_MSG_SIZE];
+    ssize_t len;
+    struct udp_packet udpPacket;
+
+    initialize_udpPacket(env, err, &udpPacket);
+    //create a thread to handle?
+    //parse incoming messages.
+        //for START message, num_packets, size_packets
+        len = dc_read(env, err, client_socket_fd, init_message, MAX_INIT_MSG_SIZE);
+        init_message[len] = '\0';
+
+        if (parse_initial_message(env, err, &udpPacket, init_message)) //if true, start the message
+        {
+            connect_to_udp(env, err, port, &udpPacket, client_socket_fd);
+        }
 }
 
 static void do_shutdown(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error *err, __attribute__ ((unused)) void *arg)

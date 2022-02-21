@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <signal.h>
 #include <unistd.h>
+#include <util.h>
 #include "client_impl.h"
 
 
@@ -154,6 +155,7 @@ static int run(const struct dc_posix_env *env, __attribute__ ((unused)) struct d
     const char *hostname;
     const char *ip_version;
     const char *start_time;
+    double start_time_delay;
     in_port_t port;
     uint16_t delay;
     uint16_t num_packets;
@@ -173,6 +175,7 @@ static int run(const struct dc_posix_env *env, __attribute__ ((unused)) struct d
     num_packets = dc_setting_uint16_get(env, app_settings->num_packets);
     packet_size = dc_setting_uint16_get(env, app_settings->packet_size);
 
+    start_time_delay = calculate_start_delay(env, err, start_time);
 
     ret_val = 0;
 
@@ -198,7 +201,7 @@ static int run(const struct dc_posix_env *env, __attribute__ ((unused)) struct d
         }
     }
 
-    ret_val = run_udp_diagnostics(env, err, hostname, family, ip_version, start_time, port, delay, num_packets, packet_size);
+    ret_val = run_udp_diagnostics(env, err, hostname, family, ip_version, start_time_delay, port, delay, num_packets, packet_size);
 
     return ret_val;
 }

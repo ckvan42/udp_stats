@@ -65,7 +65,7 @@ struct udp_packet
 struct client_udp
 {
     struct connection* connections;
-    char* start_time;
+    double start_time;
     uint16_t delay;
     uint16_t num_packets;
     uint16_t packet_size;

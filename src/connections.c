@@ -3,6 +3,7 @@
 #include <dc_posix/dc_string.h>
 #include <dc_posix/sys/dc_socket.h>
 #include <dc_posix/dc_stdlib.h>
+#include <dc_posix/dc_unistd.h>
 #include "connections.h"
 
 void create_tcp_connection(  const struct dc_posix_env *env, struct dc_error *err, struct connection* connection,
@@ -74,4 +75,17 @@ void create_udp_connection(  const struct dc_posix_env *env, struct dc_error *er
 
     connection->udp_ai_addr = dc_calloc(env, err, 1, sizeof(struct sockaddr));
     dc_memcpy(env, connection->udp_ai_addr, &servaddr, sizeof(struct sockaddr));
+
+    dc_connect(env, err, connection->tcp_sockfd, connection->tcp_ai_addr, sizeof(struct sockaddr));
+}
+
+
+void destroy_tcp_connection(const struct dc_posix_env *env, struct dc_error *err, struct connection* connection)
+{
+    dc_close(env, err, connection->tcp_sockfd);
+}
+
+void destroy_udp_connection(const struct dc_posix_env *env, struct dc_error *err, struct connection* connection)
+{
+    dc_close(env, err, connection->udp_sockfd);
 }

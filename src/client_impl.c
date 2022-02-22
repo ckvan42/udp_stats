@@ -113,7 +113,7 @@ int send_tcp_start(const struct dc_posix_env *env, struct dc_error *err, void* a
     clientUdp = (struct client_udp*) arg;
     connection = clientUdp->connections;
     sprintf(tcp_start_message, "%s:%d:%d\n", START_MESSAGE, clientUdp->num_packets, clientUdp->packet_size);
-    dc_write(env, err, connection->tcp_sockfd, tcp_start_message, dc_strlen(env, tcp_start_message));
+    dc_write(env, err, connection->tcp_sockfd, tcp_start_message, dc_strlen(env, tcp_start_message) + 1);
     if(dc_error_has_error(err))
     {
         return ERROR;
@@ -152,8 +152,6 @@ int send_udp(const struct dc_posix_env *env, struct dc_error *err, void* arg)
     return SEND_TCP_END;
 }
 
-
-
 int handler_error(const struct dc_posix_env *env, struct dc_error *err, void* arg)
 {
     return DESTROY_STATE;
@@ -168,6 +166,8 @@ int send_tcp_end(const struct dc_posix_env *env, struct dc_error *err, void* arg
     clientUdp = (struct client_udp*) arg;
     connection = clientUdp->connections;
     tcp_end_message = END_MESSAGE;
+
+    dc_sleep(env, 5);
 
     dc_write(env, err, connection->tcp_sockfd, tcp_end_message, dc_strlen(env, tcp_end_message) + 1);
     if(dc_error_has_error(err))

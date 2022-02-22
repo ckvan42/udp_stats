@@ -9,15 +9,13 @@
 #include <dc_posix/dc_stdlib.h>
 
 #define HOUR_SEPARATOR ":"
-
-
 /**
  *
  * @param first
  * @param second
  */
 
-static void array_swap(size_t *first, size_t *second);
+static void sort_array(size_t *arr, size_t length);
 
 /**
  * Calculate the start_delay from the start_time.
@@ -29,6 +27,50 @@ static void array_swap(size_t *first, size_t *second);
  *
  */
 static double parse_time(const struct dc_posix_env* env, struct dc_error *err, const char* start_time);
+
+static size_t * createArray(const struct dc_posix_env* env, struct dc_error *err, void * arg, size_t *array);
+
+void process_udp(const struct dc_posix_env* env, struct dc_error *err, void *arg)
+{
+    struct udp_packet* udpPackets;
+    size_t num_packets_received;
+
+
+    udpPackets = (struct udp_packet*) arg;
+    num_packets_received = udpPackets->diagnostics->packet_received;
+    size_t array[num_packets_received];
+    size_t sorted[num_packets_received];
+
+    if (num_packets_received > 0)
+    {
+        //create size_t array with id's only.
+
+        createArray(env, err, udpPackets, &array[0]);
+        dc_memcpy(env, sorted, array, sizeof(array));
+        sort_array(sorted, num_packets_received);
+        count_min_max_dropped(sorted, num_packets_received, &udpPackets->diagnostics->min_lost, &udpPackets->diagnostics->max_lost);
+        count_min_max_out_of_order(env, array, num_packets_received, &udpPackets->diagnostics->min_out_of_order, &udpPackets->diagnostics->max_out_of_order);
+        udpPackets->diagnostics->average_packet_lost = calculate_average_packets_lost(num_packets_received, udpPackets->diagnostics->packet_sent);
+    }
+  }
+static size_t * createArray(const struct dc_posix_env* env, struct dc_error *err, void * arg, size_t *array)
+{
+    struct udp_packet* udpPackets;
+    size_t num_packets_received;
+    char * temp;
+    udpPackets = (struct udp_packet*) arg;
+    num_packets_received = udpPackets->diagnostics->packet_received;
+
+    for (size_t i = 0; i < num_packets_received; i++)
+    {
+        temp = dc_strdup(env, err, udpPackets->list_packets[i]);
+        char *pt = temp;
+        array[i] = (size_t) dc_strtol(env, err, temp, NULL, 10);
+        free(pt);
+    }
+    return array;
+}
+
 
 /**
  * Process the packets for dropped, out-of-order packets in sequence.
@@ -72,14 +114,30 @@ void process_packets_in_sequence(const struct dc_posix_env *env, struct dc_error
     }
 }
 
-void count_min_max_dropped(const size_t *array, size_t numberOfPackets, size_t *min, size_t *max)
+static void sort_array(size_t *arr, size_t length)
+{
+    size_t temp;
+
+    for (size_t i = 0; i < length; i++) {
+        for (size_t j = i+1; j < length; j++) {
+            if(arr[i] > arr[j]) {
+                temp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = temp;
+            }
+        }
+    }
+}
+
+void count_min_max_dropped(size_t *array, size_t numberOfPackets, size_t *min, size_t *max)
 {
     // loop through the array
     size_t temp_max;
     size_t temp_min;
 
     size_t difference;
-
+    //sort the array
+    sort_array(array, numberOfPackets);
     temp_max = 0;
     temp_min = numberOfPackets;
     for (size_t i = 0; i < numberOfPackets - 1; ++i)
@@ -89,10 +147,10 @@ void count_min_max_dropped(const size_t *array, size_t numberOfPackets, size_t *
         {
             if (difference < temp_min)
             {
-                temp_min = difference;
+                temp_min = difference - 1;
             } else if (difference > temp_max)
             {
-                temp_max = difference;
+                temp_max = difference - 1;
             }
         }
     }
@@ -104,8 +162,8 @@ void count_min_max_dropped(const size_t *array, size_t numberOfPackets, size_t *
 
     // min is temp_min - 1
     // max is temp_max - 1
-    *min = temp_min - 1;
-    *max = temp_max - 1;
+    *min = temp_min;
+    *max = temp_max;
 }
 
 double calculate_average_packets_lost(size_t numberOfPackets, size_t totalPacketsSent)

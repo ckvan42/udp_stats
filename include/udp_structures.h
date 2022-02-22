@@ -43,7 +43,7 @@ struct diagnostics
     size_t packet_size;
     size_t packet_received;
     size_t packet_lost;
-    size_t packet_out_of_order;
+    double average_packet_lost;
     size_t min_lost;
     size_t max_lost;
     size_t min_out_of_order;

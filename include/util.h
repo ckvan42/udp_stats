@@ -9,6 +9,8 @@
 #include "dc_posix/dc_posix_env.h"
 #include "dc_error/error.h"
 
+void process_udp(const struct dc_posix_env* env, struct dc_error *err, void *arg);
+
 /**
  * count the minimum and maximum dropped packets in sequence.
  *
@@ -17,7 +19,7 @@
  * @param min number of dropped packets in sequence
  * @param max number of dropped packets in sequence
  */
-void count_min_max_dropped(const size_t *array, size_t numberOfPackets, size_t *min, size_t *max);
+void count_min_max_dropped(size_t *array, size_t numberOfPackets, size_t *min, size_t *max);
 
 /**
  * count the minimum and maximum out of order packets in sequence.

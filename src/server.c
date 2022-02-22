@@ -15,6 +15,7 @@
 #include <getopt.h>
 #include <unistd.h>
 #include "connections.h"
+#include "util.h"
 #include <poll.h>
 #include <dc_posix/dc_unistd.h>
 #include <arpa/inet.h>
@@ -374,9 +375,10 @@ static void print_packets(struct udp_packet* packet)
     int i;
     i = 0;
 
-    while (packet->list_packets[i + 1])
+    while ((packet->list_packets[i]) && (i < packet->diagnostics->packet_sent))
     {
-        printf("EACH PACKET: %s\n", packet->list_packets[i++]);
+        printf("EACH PACKET: %s\n", packet->list_packets[i]);
+        i++;
     }
 }
 
@@ -442,7 +444,8 @@ static void connect_to_udp(const struct dc_posix_env* env, struct dc_error * err
                     ip = inet_ntoa(cliaddr.sin_addr);
                     udpPacket->diagnostics->info->ip_address = dc_strdup(env, err, ip);
                 }
-                udpPacket->list_packets[i++] = dc_strdup(env, err, buffer);
+                udpPacket->list_packets[i] = dc_strdup(env, err, buffer);
+                i++;
             }
 
             if (poll_set[1].revents & POLLIN)
@@ -451,7 +454,7 @@ static void connect_to_udp(const struct dc_posix_env* env, struct dc_error * err
 
                 size = dc_strlen(env, END_MESSAGE) + 1;
                 char incoming[size];
-                n = (size_t) recv(poll_set[1].fd, incoming, size, 0);
+                n = (size_t) read(poll_set[1].fd, incoming, size);
                 incoming[n] = '\0';
                 if (dc_strcmp(env, END_MESSAGE, incoming) == 0)
                 {
@@ -460,7 +463,10 @@ static void connect_to_udp(const struct dc_posix_env* env, struct dc_error * err
             }
         }
     }
+    udpPacket->diagnostics->packet_received = (size_t) i;
     print_packets(udpPacket);
+
+    //reset_needed
     dc_close(env, err, sockfd);
 }
 
@@ -470,8 +476,8 @@ static void initialize_udpPacket(const struct dc_posix_env *env, struct dc_error
 
     udp_packet = (struct udp_packet *)arg;
 
-    udp_packet->diagnostics = dc_calloc(env, err, 1, sizeof (struct diagnostics *));
-    udp_packet->diagnostics->info = dc_calloc(env, err, 1, sizeof (struct client_info *));
+    udp_packet->diagnostics = dc_calloc(env, err, 1, sizeof (struct diagnostics));
+    udp_packet->diagnostics->info = dc_calloc(env, err, 1, sizeof (struct client_info));
 }
 #define START true
 #define MESSAGE_SEPARATOR ":"
@@ -485,7 +491,6 @@ static bool parse_initial_message(const struct dc_posix_env *env, struct dc_erro
     char *start_str;
     char *rest;
     char *num_packets_sent_str;
-    char *pack_size_str;
     struct udp_packet* udpPacket;
 
 
@@ -497,19 +502,20 @@ static bool parse_initial_message(const struct dc_posix_env *env, struct dc_erro
     tempSize = dc_strlen(env, temp);
     start_str = dc_strtok_r(env, temp, MESSAGE_SEPARATOR, &temp);
     num_packets_sent_str = temp;
-    pack_size_str = dc_strtok_r(env, temp, MESSAGE_SEPARATOR, &temp);
+    dc_strtok_r(env, temp, MESSAGE_SEPARATOR, &temp);
 
     if (dc_strcmp(env, start_str, START_MESSAGE) == 0)
     {
         udpPacket->diagnostics->packet_sent = (size_t) dc_strtol(env, err, num_packets_sent_str, &rest, 10);
         udpPacket->list_packets = dc_calloc(env, err, udpPacket->diagnostics->packet_sent, sizeof(char*));
-        udpPacket->diagnostics->packet_size = (size_t) dc_strtol(env, err, pack_size_str, &rest, 10);
+        udpPacket->diagnostics->packet_size = (size_t) dc_strtol(env, err, temp, &rest, 10);
         res = START;
     }
     dc_free(env, tempPt, tempSize);
     return res;
 }
 
+static void reset_udp(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket);
 
 /**
  * Initial incoming information.
@@ -529,13 +535,67 @@ void echo(const struct dc_posix_env *env, struct dc_error *err, int client_socke
     //create a thread to handle?
     //parse incoming messages.
         //for START message, num_packets, size_packets
-        len = dc_read(env, err, client_socket_fd, init_message, MAX_INIT_MSG_SIZE);
-        init_message[len] = '\0';
+    len = dc_read(env, err, client_socket_fd, init_message, MAX_INIT_MSG_SIZE);
+    init_message[len] = '\0';
 
-        if (parse_initial_message(env, err, &udpPacket, init_message)) //if true, start the message
+    if (parse_initial_message(env, err, &udpPacket, init_message)) //if true, start the message
+    {
+        connect_to_udp(env, err, port, &udpPacket, client_socket_fd);
+        if (dc_error_has_no_error(err))
         {
-            connect_to_udp(env, err, port, &udpPacket, client_socket_fd);
+            process_udp(env, err, &udpPacket);
         }
+    }
+    reset_udp(env, err, &udpPacket);
+}
+
+static void free_list_packets(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket);
+static void free_list_diagnostics(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket);
+
+static void reset_udp(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket)
+{
+    if (udpPacket)
+    {
+        free_list_packets(env, err, udpPacket);
+        free_list_diagnostics(env, err, udpPacket);
+    }
+}
+
+static void free_list_packets(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket)
+{
+    int i = 0;
+    while (udpPacket->list_packets[i])
+    {
+        dc_free(env, udpPacket->list_packets[i], dc_strlen(env, udpPacket->list_packets[i]) + 1);
+        i++;
+    }
+}
+//static void free_packet_number_array(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket)
+//{
+//    if (udpPacket->packet_number_array)
+//    {
+//        size_t size = udpPacket->diagnostics->packet_sent * sizeof(char*);
+//        dc_free(env, udpPacket->packet_number_array, size);
+//    }
+//    udpPacket->packet_number_array = NULL;
+//}
+static void free_list_diagnostics(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket)
+{
+    if(udpPacket->diagnostics)
+    {
+        if (udpPacket->diagnostics->info)
+        {
+            if (udpPacket->diagnostics->info->ip_address)
+            {
+                dc_free(env, udpPacket->diagnostics->info->ip_address, dc_strlen(env, udpPacket->diagnostics->info->ip_address));
+                udpPacket->diagnostics->info->ip_address = NULL;
+            }
+            dc_free(env, udpPacket->diagnostics->info, sizeof(struct client_info));
+            udpPacket->diagnostics->info = NULL;
+        }
+        dc_free(env, udpPacket->diagnostics, sizeof(struct diagnostics));
+        udpPacket->diagnostics = NULL;
+    }
 }
 
 static void do_shutdown(const struct dc_posix_env *env, __attribute__ ((unused)) struct dc_error *err, __attribute__ ((unused)) void *arg)

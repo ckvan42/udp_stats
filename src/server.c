@@ -19,6 +19,7 @@
 #include <poll.h>
 #include <dc_posix/dc_unistd.h>
 #include <arpa/inet.h>
+#include <dc_posix/dc_fcntl.h>
 
 
 struct application_settings
@@ -382,8 +383,12 @@ static void print_packets(struct udp_packet* packet)
     }
 }
 
-#define MAXLINE 100
+static void output_result(const struct dc_posix_env *env, struct dc_error *err, void* arg);
+static void print_packets(struct udp_packet* packet);
+static int create_log_file(const struct dc_posix_env *env, struct dc_error *err);
+
 #define TIME_OUT_SEC 5
+#define MAX_LOG_SIZE 1024
 static void connect_to_udp(const struct dc_posix_env* env, struct dc_error * err, uint16_t port, void *arg, int tcp_fd)
 {
     int       sockfd;
@@ -395,79 +400,142 @@ static void connect_to_udp(const struct dc_posix_env* env, struct dc_error * err
     int timeout;
     int res_val;
     struct udp_packet* udpPacket;
+    int log_fd;
 
     udpPacket = (struct udp_packet*)arg;
 
     char      buffer[udpPacket->diagnostics->packet_size + 1];
     timeout = TIME_OUT_SEC * 1000;
-    if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+
+    log_fd = create_log_file(env, err);
+
+    if (dc_error_has_no_error(err))
     {
-        perror("socket creation failed");
-        exit(EXIT_FAILURE);
-    }
-
-    memset(&servaddr, 0, sizeof(servaddr));
-    memset(&cliaddr, 0, sizeof(cliaddr));
-
-    servaddr.sin_family      = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = INADDR_ANY;
-    servaddr.sin_port        = htons(port);
-
-    if(bind(sockfd, (const struct sockaddr *)&servaddr,  sizeof(servaddr)) < 0)
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    poll_set[0].fd = sockfd;
-    poll_set[0].events = POLLIN;
-
-    poll_set[1].fd = tcp_fd;
-    poll_set[1].events = POLLIN;
-    len = sizeof(cliaddr);  //len is value/resuslt
-    int i = 0;
-    while ((res_val = poll(poll_set, 2, timeout)) >= 0)
-    {
-        if (res_val != 0)
+        if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
         {
-            if (poll_set[0].revents & POLLIN)
+            perror("socket creation failed");
+            exit(EXIT_FAILURE);
+        }
+
+        memset(&servaddr, 0, sizeof(servaddr));
+        memset(&cliaddr, 0, sizeof(cliaddr));
+
+        servaddr.sin_family      = AF_INET; // IPv4
+        servaddr.sin_addr.s_addr = INADDR_ANY;
+        servaddr.sin_port        = htons(port);
+
+        if(bind(sockfd, (const struct sockaddr *)&servaddr,  sizeof(servaddr)) < 0)
+        {
+            perror("bind failed");
+            exit(EXIT_FAILURE);
+        }
+
+        poll_set[0].fd = sockfd;
+        poll_set[0].events = POLLIN;
+
+        poll_set[1].fd = tcp_fd;
+        poll_set[1].events = POLLIN;
+        len = sizeof(cliaddr);  //len is value/resuslt
+        int i = 0;
+        while ((res_val = poll(poll_set, 2, timeout)) >= 0)
+        {
+            if (res_val != 0)
             {
-                n = (size_t) recvfrom(poll_set[0].fd, (char *) buffer, udpPacket->diagnostics->packet_size,
-                                      MSG_WAITALL, (struct sockaddr *) &cliaddr,
-                                      &len);
-                buffer[n] = '\0';
-                if (i ==0) //only happens for the first time.
+                if (poll_set[0].revents & POLLIN)
                 {
                     char *ip;
-
-                    udpPacket->diagnostics->info->client_port = cliaddr.sin_port;
+                    n = (size_t) recvfrom(poll_set[0].fd, (char *) buffer, udpPacket->diagnostics->packet_size,
+                                          MSG_WAITALL, (struct sockaddr *) &cliaddr,
+                                          &len);
+                    buffer[n] = '\0';
+                    char file_content[MAX_LOG_SIZE];
+                    size_t size_file_content;
                     ip = inet_ntoa(cliaddr.sin_addr);
-                    udpPacket->diagnostics->info->ip_address = dc_strdup(env, err, ip);
+                    sprintf(file_content, "client port: %d\nip address: %s\nPACKET: %s\n", cliaddr.sin_port, ip, buffer);
+                    size_file_content = dc_strlen(env, file_content) + 1;
+                    dc_write(env, err, log_fd, file_content, size_file_content);
+//                    if (i ==0) //only happens for the first time.
+//                    {
+//                        udpPacket->diagnostics->info->client_port = cliaddr.sin_port;
+//                        udpPacket->diagnostics->info->ip_address = dc_strdup(env, err, ip);
+//                    }
+//                    //output_to_file
+//
+//                    udpPacket->list_packets[i] = dc_strdup(env, err, buffer);
+                    i++;
                 }
-                udpPacket->list_packets[i] = dc_strdup(env, err, buffer);
-                i++;
-            }
 
-            if (poll_set[1].revents & POLLIN)
-            {
-                size_t size;
-
-                size = dc_strlen(env, END_MESSAGE) + 1;
-                char incoming[size];
-                n = (size_t) read(poll_set[1].fd, incoming, size);
-                incoming[n] = '\0';
-                if (dc_strcmp(env, END_MESSAGE, incoming) == 0)
+                if (poll_set[1].revents & POLLIN)
                 {
-                    break;
+                    size_t size;
+
+                    size = dc_strlen(env, END_MESSAGE) + 1;
+                    char incoming[size];
+                    n = (size_t) read(poll_set[1].fd, incoming, size);
+                    incoming[n] = '\0';
+                    if (dc_strcmp(env, END_MESSAGE, incoming) == 0)
+                    {
+                        break;
+                    }
                 }
             }
         }
-    }
-    udpPacket->diagnostics->packet_received = (size_t) i;
-    print_packets(udpPacket);
+        udpPacket->diagnostics->packet_received = (size_t) i;
 
-    //reset_needed
-    dc_close(env, err, sockfd);
+        if (dc_error_has_no_error(err))
+        {
+//        process_udp(env, err, &udpPacket);
+            if (dc_error_has_no_error(err))
+            {
+//            output_result(env, err, &(udpPacket->diagnostics));
+            }
+        }
+        //reset_needed
+//        print_packets(udpPacket);
+        dc_close(env, err, log_fd);
+        dc_close(env, err, sockfd);
+    }
+}
+
+#define FILE_NAME_LENGTH 100
+
+static int create_log_file(const struct dc_posix_env *env, struct dc_error *err)
+{
+    struct tm* ptr;
+    int file_fd;
+
+    time_t current_time;
+    current_time = time(NULL);
+    ptr = localtime(&current_time);
+
+
+
+    //make file name
+    char fileName[FILE_NAME_LENGTH];
+    sprintf(fileName, "UDP_LOG_FILE: %s.log", asctime(ptr));
+    file_fd = dc_open(env, err, fileName, O_CREAT|O_WRONLY|O_APPEND, S_IRWXU|S_IRGRP|S_IROTH);
+
+    return file_fd;
+}
+
+static void output_result(const struct dc_posix_env *env, struct dc_error *err, void* arg)
+{
+    ssize_t sz;
+    struct diagnostics* diagnostics;
+
+    diagnostics = arg;
+
+    int fd = open("foo.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0)
+    {
+        perror("r1");
+        exit(1);
+    }
+//    char tmp[10000];
+//    sprintf(tmp, "Client Info: \n ip-address: %s, \t port: %d\n, packet_sent: %zu\n packet_received: %zu\n",
+//            diagnostics->info->ip_address, diagnostics->info->client_port, diagnostics->packet_sent, diagnostics->packet_received);
+//    sz = dc_write(env, err, STDOUT_FILENO, tmp, strlen(tmp));
+    close(fd);
 }
 
 static void initialize_udpPacket(const struct dc_posix_env *env, struct dc_error *err, void* arg)
@@ -541,12 +609,8 @@ void echo(const struct dc_posix_env *env, struct dc_error *err, int client_socke
     if (parse_initial_message(env, err, &udpPacket, init_message)) //if true, start the message
     {
         connect_to_udp(env, err, port, &udpPacket, client_socket_fd);
-        if (dc_error_has_no_error(err))
-        {
-            process_udp(env, err, &udpPacket);
-        }
     }
-    reset_udp(env, err, &udpPacket);
+//    reset_udp(env, err, &udpPacket);
 }
 
 static void free_list_packets(const struct dc_posix_env* env, struct dc_error* err, struct udp_packet* udpPacket);

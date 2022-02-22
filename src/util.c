@@ -14,7 +14,6 @@
  * @param first
  * @param second
  */
-
 static void sort_array(size_t *arr, size_t length);
 
 /**
@@ -44,7 +43,6 @@ void process_udp(const struct dc_posix_env* env, struct dc_error *err, void *arg
     if (num_packets_received > 0)
     {
         //create size_t array with id's only.
-
         createArray(env, err, udpPackets, &array[0]);
         dc_memcpy(env, sorted, array, sizeof(array));
         sort_array(sorted, num_packets_received);
@@ -53,23 +51,6 @@ void process_udp(const struct dc_posix_env* env, struct dc_error *err, void *arg
         udpPackets->diagnostics->average_packet_lost = calculate_average_packets_lost(num_packets_received, udpPackets->diagnostics->packet_sent);
     }
   }
-static size_t * createArray(const struct dc_posix_env* env, struct dc_error *err, void * arg, size_t *array)
-{
-    struct udp_packet* udpPackets;
-    size_t num_packets_received;
-    char * temp;
-    udpPackets = (struct udp_packet*) arg;
-    num_packets_received = udpPackets->diagnostics->packet_received;
-
-    for (size_t i = 0; i < num_packets_received; i++)
-    {
-        temp = dc_strdup(env, err, udpPackets->list_packets[i]);
-        char *pt = temp;
-        array[i] = (size_t) dc_strtol(env, err, temp, NULL, 10);
-        free(pt);
-    }
-    return array;
-}
 
 
 /**
@@ -109,21 +90,6 @@ void process_packets_in_sequence(const struct dc_posix_env *env, struct dc_error
             else if (temp_dropped > max_dropped)
             {
                 max_dropped = temp_dropped;
-            }
-        }
-    }
-}
-
-static void sort_array(size_t *arr, size_t length)
-{
-    size_t temp;
-
-    for (size_t i = 0; i < length; i++) {
-        for (size_t j = i+1; j < length; j++) {
-            if(arr[i] > arr[j]) {
-                temp = arr[i];
-                arr[i] = arr[j];
-                arr[j] = temp;
             }
         }
     }
@@ -180,7 +146,6 @@ double calculate_average_packets_lost(size_t numberOfPackets, size_t totalPacket
     }
     return result;
 }
-
 
 
 void count_min_max_out_of_order(const struct dc_posix_env* env, const size_t *array, size_t numberOfPackets, size_t *min, size_t *max)
@@ -291,3 +256,37 @@ static double parse_time(const struct dc_posix_env* env, struct dc_error *err, c
     return difference;
 }
 
+
+static size_t * createArray(const struct dc_posix_env* env, struct dc_error *err, void * arg, size_t *array)
+{
+    struct udp_packet* udpPackets;
+    size_t num_packets_received;
+    char * temp;
+    udpPackets = (struct udp_packet*) arg;
+    num_packets_received = udpPackets->diagnostics->packet_received;
+
+    for (size_t i = 0; i < num_packets_received; i++)
+    {
+        temp = dc_strdup(env, err, udpPackets->list_packets[i]);
+        char *pt = temp;
+        array[i] = (size_t) dc_strtol(env, err, temp, NULL, 10);
+        free(pt);
+    }
+    return array;
+}
+
+
+static void sort_array(size_t *arr, size_t length)
+{
+    size_t temp;
+
+    for (size_t i = 0; i < length; i++) {
+        for (size_t j = i+1; j < length; j++) {
+            if(arr[i] > arr[j]) {
+                temp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = temp;
+            }
+        }
+    }
+}
